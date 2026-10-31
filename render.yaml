@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: concorsi-milano
+    runtime: python
+    plan: starter            # sempre acceso, necessario per il disco persistente
+    region: frankfurt
+    buildCommand: pip install -r requirements.txt
+    # un solo worker: lo scheduler interno deve girare una volta sola
+    startCommand: gunicorn app:app --workers 1 --threads 8 --timeout 180 --graceful-timeout 20 --bind 0.0.0.0:$PORT
+    healthCheckPath: /health
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: DATA_DIR
+        value: /var/data
+      - key: CHECK_INTERVAL_MINUTES
+        value: "120"
+      - key: ALERT_EMAIL
+        value: versi.traccianti6@icloud.com
+      - key: RESEND_API_KEY
+        sync: false          # la stessa chiave usata per Price Watch
+      - key: APP_PASSWORD
+        sync: false          # password per aprire la web app
+      - key: CRON_TOKEN
+        generateValue: true

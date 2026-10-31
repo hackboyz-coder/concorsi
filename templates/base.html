@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Concorsi Milano</title>
+<style>
+  :root { --bg:#f6f5f2; --card:#fff; --ink:#1d1d1b; --mute:#77756f; --line:#e6e3dc;
+          --acc:#0f6b4f; --warn:#b4471b; --hit:#e7f4ee; }
+  * { box-sizing:border-box }
+  body { margin:0; font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; background:var(--bg); color:var(--ink) }
+  main { max-width:960px; margin:0 auto; padding:28px 18px 60px }
+  h1 { font-size:22px; margin:0 0 4px }
+  nav { display:flex; gap:16px; margin-bottom:6px; font-size:14px }
+  nav a { color:var(--mute) } nav a.on { color:var(--ink); font-weight:600; text-decoration:none }
+  .sub { color:var(--mute); margin:0 0 22px }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; margin-bottom:18px }
+  label { display:block; font-size:13px; color:var(--mute); margin-bottom:4px }
+  input[type=text], input:not([type]) { width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:8px; font:inherit; background:#fff }
+  button { font:inherit; padding:8px 14px; border-radius:8px; border:1px solid var(--line); background:#fff; cursor:pointer; color:var(--ink) }
+  button.primary { background:var(--acc); border-color:var(--acc); color:#fff }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap }
+  .note { font-size:13px; color:var(--mute) }
+  .err { font-size:13px; color:var(--warn) }
+  .warnbox { border-color:#f0c9b5; background:#fdf3ee }
+  table { width:100%; border-collapse:collapse; font-size:14px }
+  td, th { padding:7px 6px; border-top:1px solid var(--line); text-align:left; vertical-align:top }
+  th { color:var(--mute); font-weight:500; border-top:0 }
+  td.num { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums }
+  tr.hit td { background:var(--hit) }
+  a { color:inherit }
+  .tag { display:inline-block; font-size:12px; padding:1px 7px; border-radius:10px; background:var(--hit); color:var(--acc) }
+  .tag.no { background:#eee; color:var(--mute) }
+</style>
+</head>
+<body><main>
+  <h1>Concorsi Milano · per diplomati</h1>
+  <nav>
+    <a href="/" class="{{ 'on' if request.path == '/' and not request.args.get('tutti') }}">Per diplomati</a>
+    <a href="/?tutti=1" class="{{ 'on' if request.args.get('tutti') }}">Tutti i bandi</a>
+    <a href="/diagnostica">Diagnostica</a>
+  </nav>
+  {% block body %}{% endblock %}
+</main></body>
+</html>
