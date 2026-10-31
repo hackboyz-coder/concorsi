@@ -291,10 +291,16 @@ def _fold(text: str) -> str:
 
 def _exclude_re(phrase: str):
     # ogni parola lunga accetta qualsiasi finale: istruttore -> istruttori, istruttrice no
-    parts = []
-    for w in _fold(phrase).split():
-        parts.append(re.escape(w[:-1]) + r"\w*" if len(w) > 4 else re.escape(w))
-    return re.compile(r"\b" + r"\s+".join(parts) + r"\b")
+    # le parole brevi (di, del, per...) sono facoltative: "avviso mobilità" vale come
+    # "avviso di mobilità"
+    rx = ""
+    for i, w in enumerate(_fold(phrase).split()):
+        tok = re.escape(w[:-1]) + r"\w*" if len(w) > 4 else re.escape(w)
+        if len(w) <= 3 and i > 0:
+            rx += r"(?:\s+" + tok + ")?"
+        else:
+            rx += (r"\s+" if rx else "") + tok
+    return re.compile(r"\b" + rx + r"\b")
 
 
 EXCLUDE_RES = [(p, _exclude_re(p)) for p in EXCLUDE]
