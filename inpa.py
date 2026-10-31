@@ -275,6 +275,39 @@ def classify(n: dict) -> tuple[str, str]:
     return "forse", "titolo di studio non indicato nell'annuncio"
 
 
+# ---------------------------------------------------------------------------
+# Esclusioni: bandi da non segnalare mai (parole nel titolo o nel profilo)
+# ---------------------------------------------------------------------------
+EXCLUDE = [w.strip() for w in os.environ.get(
+    "EXCLUDE_WORDS", "avviso di mobilità,istruttore").split(",") if w.strip()]
+
+
+def _fold(text: str) -> str:
+    """Minuscolo e senza accenti, per confronti tolleranti."""
+    import unicodedata
+    t = unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode()
+    return t.lower().replace("'", " ")
+
+
+def _exclude_re(phrase: str):
+    # ogni parola lunga accetta qualsiasi finale: istruttore -> istruttori, istruttrice no
+    parts = []
+    for w in _fold(phrase).split():
+        parts.append(re.escape(w[:-1]) + r"\w*" if len(w) > 4 else re.escape(w))
+    return re.compile(r"\b" + r"\s+".join(parts) + r"\b")
+
+
+EXCLUDE_RES = [(p, _exclude_re(p)) for p in EXCLUDE]
+
+
+def excluded(n: dict) -> str | None:
+    text = _fold(" ".join(x for x in (n["title"], n["figura"]) if x))
+    for phrase, rx in EXCLUDE_RES:
+        if rx.search(text):
+            return phrase
+    return None
+
+
 def fetch_milano():
     """Bandi aperti nella zona, già classificati. Ritorna (lista, report)."""
     recs, report = fetch_open()
@@ -283,7 +316,11 @@ def fetch_milano():
         n = normalise(r)
         if not n["id"] or not in_area(n):
             continue
-        n["class"], n["reason"] = classify(n)
+        ex = excluded(n)
+        if ex:
+            n["class"], n["reason"] = "no", f"escluso: contiene «{ex}»"
+        else:
+            n["class"], n["reason"] = classify(n)
         n.pop("raw")
         out.append(n)
     report["open_total"] = len(recs)

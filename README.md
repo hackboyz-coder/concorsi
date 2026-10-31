@@ -41,6 +41,7 @@ Costo: piano Starter (7 $/mese) + disco da 1 GB (~0,25 $/mese).
 | `APP_PASSWORD` | protegge la web app |
 | `CHECK_INTERVAL_MINUTES` | frequenza dei controlli (default 1440 = 24 ore) |
 | `PLACE_WORDS`, `PROVINCE_CODES` | zona (default `milano` e `MI`, separati da virgola) |
+| `EXCLUDE_WORDS` | bandi da ignorare sempre (default `avviso di mobilità,istruttore`) |
 | `NOTIFY_UNSURE` | `1` = manda email anche per i bandi da verificare |
 | `INPA_API_URL`, `INPA_MAX_PAGES` | endpoint e pagine massime dell'API inPA |
 | `DATA_DIR` / `DATABASE_URL` | SQLite su disco oppure Postgres |

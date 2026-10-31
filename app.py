@@ -293,7 +293,9 @@ def diagnostica():
             for r in recs:
                 n = inpa.normalise(r)
                 if inpa.in_area(n):
-                    n["class"], n["reason"] = inpa.classify(n)
+                    ex = inpa.excluded(n)
+                    n["class"], n["reason"] = (("no", f"escluso: {ex}") if ex
+                                               else inpa.classify(n))
                     mil.append(n)
             out.append(f"\nDI CUI A MILANO in queste pagine: {len(mil)}")
             for n in mil:
