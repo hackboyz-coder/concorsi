@@ -1,6 +1,6 @@
 # Concorsi Milano · per diplomati
 
-Web app (stessa struttura di Price Watch) che ogni 2 ore legge
+Web app (stessa struttura di Price Watch) che una volta al giorno legge
 https://www.concorsipubblici.com/concorsi/regione/loc/milano, apre ogni bando nuovo e
 invia un'email a `ALERT_EMAIL` quando il bando richiede **al massimo il diploma di
 scuola secondaria superiore**: licenza media, scuola dell'obbligo, qualifica
@@ -36,7 +36,7 @@ Costo: piano Starter (7 $/mese) + disco da 1 GB (~0,25 $/mese).
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` | alternativa SMTP |
 | `APP_PASSWORD` | protegge la web app |
 | `LIST_URL` | pagina da monitorare (default: concorsi di Milano) |
-| `CHECK_INTERVAL_MINUTES` | frequenza dei controlli (default 120 = 2 ore) |
+| `CHECK_INTERVAL_MINUTES` | frequenza dei controlli (default 1440 = 24 ore) |
 | `MAX_LIST_PAGES`, `MAX_DETAIL_PAGES` | limiti di pagine lette per controllo |
 | `DATA_DIR` / `DATABASE_URL` | SQLite su disco oppure Postgres |
 | `CRON_TOKEN` | per avviare un controllo da fuori: `/cron?token=...` |

@@ -173,7 +173,7 @@ def scan():
 app = Flask(__name__)
 APP_PASSWORD = os.environ.get("APP_PASSWORD")
 CRON_TOKEN = os.environ.get("CRON_TOKEN")
-INTERVAL = int(os.environ.get("CHECK_INTERVAL_MINUTES", "120"))
+INTERVAL = int(os.environ.get("CHECK_INTERVAL_MINUTES", "1440"))
 scheduler = None
 
 

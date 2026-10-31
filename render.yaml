@@ -18,7 +18,7 @@ services:
       - key: DATA_DIR
         value: /var/data
       - key: CHECK_INTERVAL_MINUTES
-        value: "120"
+        value: "1440"
       - key: ALERT_EMAIL
         value: versi.traccianti6@icloud.com
       - key: RESEND_API_KEY
