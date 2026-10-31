@@ -279,7 +279,7 @@ def classify(n: dict) -> tuple[str, str]:
 # Esclusioni: bandi da non segnalare mai (parole nel titolo o nel profilo)
 # ---------------------------------------------------------------------------
 EXCLUDE = [w.strip() for w in os.environ.get(
-    "EXCLUDE_WORDS", "avviso di mobilità,istruttore").split(",") if w.strip()]
+    "EXCLUDE_WORDS", "mobilità,istruttore").split(",") if w.strip()]
 
 
 def _fold(text: str) -> str:
