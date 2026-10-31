@@ -96,24 +96,81 @@ def find_deadline(text: str) -> str | None:
 # ---------------------------------------------------------------------------
 # Scraping
 # ---------------------------------------------------------------------------
-session = requests.Session()
-session.headers.update(HEADERS)
+BROWSER_HEADERS = {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,"
+              "image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.7,en;q=0.6",
+    "Upgrade-Insecure-Requests": "1",
+}
+
+# curl_cffi imita la connessione TLS/HTTP2 di Chrome: molti siti rispondono 403
+# alle richieste "da script" anche con un User-Agent da browser.
+try:
+    from curl_cffi import requests as cffi_requests
+except ImportError:  # pragma: no cover
+    cffi_requests = None
+
+IMPERSONATE = os.environ.get("IMPERSONATE", "chrome")
+_sessions: dict = {}
+_warmed = False
+
+
+def _session(kind: str):
+    if kind not in _sessions:
+        if kind == "cffi":
+            s = cffi_requests.Session(impersonate=IMPERSONATE)
+            s.headers.update(BROWSER_HEADERS)
+        else:
+            s = requests.Session()
+            s.headers.update({**HEADERS, **BROWSER_HEADERS})
+        _sessions[kind] = s
+    return _sessions[kind]
+
+
+def _get(kind: str, url: str, referer: str | None):
+    headers = {"Referer": referer} if referer else {}
+    r = _session(kind).get(url, timeout=30, headers=headers)
+    if r.status_code >= 400:
+        raise RuntimeError(f"HTTP {r.status_code}")
+    return r
+
+
+def _warm_up():
+    """Visita la home come farebbe un browser, per ricevere i cookie del sito."""
+    global _warmed
+    if _warmed:
+        return
+    _warmed = True
+    home = f"{urlparse(LIST_URL).scheme}://{urlparse(LIST_URL).netloc}/"
+    for kind in (["cffi"] if cffi_requests else []) + ["requests"]:
+        try:
+            _get(kind, home, None)
+        except Exception as e:  # noqa: BLE001
+            log.info("Home non raggiungibile con %s: %s", kind, e)
 
 
 def fetch(url: str) -> str:
-    last = None
+    _warm_up()
+    kinds = (["cffi"] if cffi_requests else []) + ["requests"]
+    referer = f"{urlparse(LIST_URL).scheme}://{urlparse(LIST_URL).netloc}/"
+    errors = []
     for attempt in range(3):
-        try:
-            time.sleep(DELAY)
-            r = session.get(url, timeout=30)
-            r.raise_for_status()
-            if not r.encoding or r.encoding.lower() == "iso-8859-1":
-                r.encoding = r.apparent_encoding or "utf-8"
-            return r.text
-        except requests.RequestException as e:
-            last = e
-            time.sleep(3 * (attempt + 1))
-    raise RuntimeError(f"{url}: {last}")
+        for kind in kinds:
+            try:
+                time.sleep(DELAY)
+                r = _get(kind, url, referer)
+                text = r.text if kind == "cffi" else _decode(r)
+                return text
+            except Exception as e:  # noqa: BLE001
+                errors.append(f"{kind}: {e}")
+        time.sleep(4 * (attempt + 1))
+    raise RuntimeError(f"{url}: {' | '.join(errors[-2:])}")
+
+
+def _decode(r) -> str:
+    if not r.encoding or r.encoding.lower() == "iso-8859-1":
+        r.encoding = r.apparent_encoding or "utf-8"
+    return r.text
 
 
 def main_content(soup: BeautifulSoup):

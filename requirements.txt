@@ -5,3 +5,4 @@ requests==2.32.*
 beautifulsoup4==4.13.*
 sqlalchemy==2.0.*
 psycopg[binary]==3.2.*
+curl_cffi==0.*
