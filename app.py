@@ -320,6 +320,11 @@ def db_busy(e):
                     503, {"Retry-After": "10"})
 
 
+@app.get("/favicon.ico")
+def favicon():
+    return redirect(url_for("static", filename="favicon.svg"), 301)
+
+
 @app.get("/health")
 def health():
     return "ok"
