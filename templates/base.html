@@ -36,8 +36,9 @@
 <body><main>
   <h1>Concorsi Milano · per diplomati</h1>
   <nav>
-    <a href="/" class="{{ 'on' if request.path == '/' and not request.args.get('tutti') }}">Per diplomati</a>
-    <a href="/?tutti=1" class="{{ 'on' if request.args.get('tutti') }}">Tutti i bandi</a>
+    <a href="/?vista=si" class="{{ 'on' if request.path == '/' and request.args.get('vista', 'si') == 'si' }}">Per diplomati</a>
+    <a href="/?vista=forse" class="{{ 'on' if request.args.get('vista') == 'forse' }}">Da verificare</a>
+    <a href="/?vista=tutti" class="{{ 'on' if request.args.get('vista') == 'tutti' }}">Tutti</a>
     <a href="/diagnostica">Diagnostica</a>
   </nav>
   {% block body %}{% endblock %}

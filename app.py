@@ -13,7 +13,7 @@ from sqlalchemy import (Boolean, Column, DateTime, Integer, MetaData, String, Ta
 from sqlalchemy.exc import OperationalError
 
 import notifier
-import scraper
+import inpa
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("concorsi")
@@ -47,17 +47,18 @@ else:
 
 meta = MetaData()
 bandi = Table(
-    "bandi", meta,
+    "bandi_inpa", meta,
     Column("id", Integer, primary_key=True),
-    Column("url", String(500), unique=True, nullable=False),
+    Column("ext_id", String(100), unique=True, nullable=False),   # id inPA
+    Column("url", String(500)),
     Column("title", Text),
-    Column("snippet", Text),
-    Column("match", Boolean, default=False),       # per diplomati (automatico)
-    Column("override", Boolean, nullable=True),    # correzione manuale
-    Column("reason", Text),
+    Column("ente", Text),
+    Column("description", Text),
     Column("deadline", String(40)),
-    Column("detail_ok", Boolean, default=False),
-    Column("tries", Integer, default=0),
+    Column("posts", String(20)),
+    Column("klass", String(10)),                   # si | no | forse (automatico)
+    Column("override", String(10), nullable=True),  # correzione manuale
+    Column("reason", Text),
     Column("present", Boolean, default=True),
     Column("first_seen", DateTime(timezone=True)),
     Column("last_seen", DateTime(timezone=True)),
@@ -69,6 +70,8 @@ state = Table(
     Column("value", Text),
 )
 meta.create_all(engine)
+
+NOTIFY_UNSURE = os.environ.get("NOTIFY_UNSURE", "0") == "1"
 
 
 def now():
@@ -91,8 +94,13 @@ def set_state(key, value):
         c.execute(insert(state).values(key=key, value=json.dumps(value, default=str)))
 
 
-def is_match(b):
-    return b["override"] if b["override"] is not None else bool(b["match"])
+def klass(b):
+    return b["override"] or b["klass"] or "forse"
+
+
+def to_notify(b):
+    k = klass(b)
+    return k == "si" or (k == "forse" and NOTIFY_UNSURE and not b["override"])
 
 
 # ---------- scansione e avvisi ----------
@@ -100,11 +108,11 @@ def notify_pending():
     """Invia una mail con i bandi per diplomati non ancora segnalati."""
     pending = [b for b in rows(select(bandi).where(bandi.c.notified_at.is_(None),
                                                    bandi.c.present.is_(True)))
-               if is_match(b)]
+               if to_notify(b)]
     if not pending:
         return 0
     try:
-        notifier.bandi_alert(pending, scraper.LIST_URL)
+        notifier.bandi_alert(pending, inpa.SOURCE_URL)
     except Exception as e:  # noqa: BLE001
         log.error("Email non inviata: %s", e)
         set_state("last_email_error", f"{now():%d/%m %H:%M} {e}")
@@ -127,40 +135,32 @@ def scan():
     try:
         set_state("scanning", True)
         started = now()
-        found, report = scraper.list_concorsi()
+        found, report = inpa.fetch_milano()
         ts = now()
-        known = {b["url"]: b for b in rows(select(bandi))}
+        known = {b["ext_id"] for b in rows(select(bandi.c.ext_id))}
         with engine.begin() as c:
-            if found:  # se il sito non risponde non tocchiamo l'elenco noto
+            if report.get("open_total"):  # se l'API non risponde non tocchiamo l'elenco
                 c.execute(update(bandi).values(present=False))
-            for url, it in found.items():
-                if url in known:
-                    c.execute(update(bandi).where(bandi.c.url == url).values(
-                        present=True, last_seen=ts, title=it["title"], snippet=it["snippet"]))
+            for n in found:
+                vals = dict(url=n["url"], title=n["title"], ente=n["ente"],
+                            description=(n["description"] or "")[:4000],
+                            deadline=n["deadline"],
+                            posts=str(n["posts"]) if n["posts"] is not None else None,
+                            klass=n["class"], reason=n["reason"][:300],
+                            present=True, last_seen=ts)
+                if n["id"] in known:
+                    c.execute(update(bandi).where(bandi.c.ext_id == n["id"]).values(**vals))
                 else:
-                    c.execute(insert(bandi).values(
-                        url=url, title=it["title"], snippet=it["snippet"], present=True,
-                        first_seen=ts, last_seen=ts, tries=0, detail_ok=False, match=False))
-
-        # analizza le schede nuove (o non lette le volte precedenti, max 3 tentativi)
-        todo = rows(select(bandi).where(bandi.c.present.is_(True), bandi.c.detail_ok.is_(False),
-                                        bandi.c.tries < 3))
-        analysed = 0
-        for b in todo[:scraper.MAX_DETAIL_PAGES]:
-            res = scraper.analyse(b)
-            analysed += 1
-            with engine.begin() as c:
-                c.execute(update(bandi).where(bandi.c.id == b["id"]).values(
-                    match=res["match"] or bool(b["match"]), reason=res["reason"] or b["reason"],
-                    deadline=res["deadline"] or b["deadline"], detail_ok=res["detail_ok"],
-                    tries=(b["tries"] or 0) + 1))
-
+                    c.execute(insert(bandi).values(ext_id=n["id"], first_seen=ts, **vals))
         sent = notify_pending() if found else 0
         ts = now()
         report.update(at=ts, seconds=int((ts - started).total_seconds()), total=len(found),
-                      analysed=analysed, emailed=sent, errors=report["errors"][:10])
+                      emailed=sent, errors=report["errors"][:10],
+                      si=sum(1 for n in found if n["class"] == "si"),
+                      forse=sum(1 for n in found if n["class"] == "forse"))
         set_state("last_scan", report)
-        log.info("Scansione: %d bandi, %d analizzati, %d segnalati", len(found), analysed, sent)
+        log.info("Scansione: %s aperti in Italia, %d a Milano, %d segnalati",
+                 report.get("open_total"), len(found), sent)
     except Exception as e:  # noqa: BLE001
         log.exception("Scansione fallita")
         set_state("last_scan", {"at": now(), "total": 0, "fatal": str(e), "errors": []})
@@ -218,37 +218,42 @@ def interval_label():
     return f"{INTERVAL // 60} ore" if INTERVAL % 60 == 0 else f"{INTERVAL} minuti"
 
 
+VIEWS = {"si": "Per diplomati", "forse": "Da verificare", "tutti": "Tutti i bandi"}
+
+
 @app.get("/")
 @protected
 def index():
-    show_all = request.args.get("tutti") == "1"
+    view = request.args.get("vista", "si")
+    view = view if view in VIEWS else "si"
     items = rows(select(bandi).where(bandi.c.present.is_(True))
                  .order_by(bandi.c.first_seen.desc(), bandi.c.id.desc()))
+    counts = {"si": 0, "forse": 0, "no": 0}
     for b in items:
-        b["ok"] = is_match(b)
-    n_match = sum(1 for b in items if b["ok"])
-    view = items if show_all else [b for b in items if b["ok"]]
-    return render_template("index.html", items=view, total=len(items), n_match=n_match,
-                           show_all=show_all, scan=get_state("last_scan"),
+        b["k"] = klass(b)
+        counts[b["k"]] = counts.get(b["k"], 0) + 1
+    shown = items if view == "tutti" else [b for b in items if b["k"] == view]
+    return render_template("index.html", items=shown, total=len(items), counts=counts,
+                           view=view, views=VIEWS, scan=get_state("last_scan"),
                            scanning=get_state("scanning", False), interval=interval_label(),
                            email_ok=notifier.email_configured(),
                            email_error=get_state("last_email_error"),
                            alert_email=os.environ.get("ALERT_EMAIL"),
-                           source=scraper.LIST_URL)
+                           notify_unsure=NOTIFY_UNSURE)
 
 
-@app.post("/bandi/<int:bid>/toggle")
+@app.post("/bandi/<int:bid>/set/<value>")
 @protected
-def toggle(bid):
-    """Correzione manuale: segna un bando come per diplomati o no."""
-    r = rows(select(bandi).where(bandi.c.id == bid))
-    if r:
-        b = r[0]
+def set_class(bid, value):
+    """Correzione manuale: si = per diplomati, no = non adatto."""
+    if value in ("si", "no"):
         with engine.begin() as c:
-            c.execute(update(bandi).where(bandi.c.id == bid).values(
-                override=not is_match(b),
-                # una correzione manuale non deve far partire una mail
-                notified_at=b["notified_at"] or now()))
+            r = c.execute(select(bandi.c.notified_at).where(bandi.c.id == bid)).first()
+            if r is not None:
+                c.execute(update(bandi).where(bandi.c.id == bid).values(
+                    override=value,
+                    # una correzione manuale non fa partire una mail
+                    notified_at=r[0] or now()))
     return redirect(request.referrer or url_for("index"))
 
 
@@ -273,20 +278,27 @@ def test_email():
 @app.get("/diagnostica")
 @protected
 def diagnostica():
-    """Mostra cosa legge l'app dalla prima pagina dell'elenco: utile se il sito cambia."""
-    out = [f"URL elenco: {scraper.LIST_URL}"]
+    """Interroga inPA (3 pagine) e mostra cosa riceve l'app: utile se l'API cambia."""
+    out = [f"API: {inpa.API_URL}"]
     try:
-        html = scraper.fetch(scraper.LIST_URL)
-        found, nxt, rejected = scraper.parse_listing(html, scraper.LIST_URL)
-        out.append(f"HTML scaricato: {len(html)} caratteri")
-        out.append(f"Pagina successiva: {nxt or 'nessuna'}")
-        out.append(f"\nBANDI RICONOSCIUTI ({len(found)}):")
-        for it in found.values():
-            ok, reason = scraper.requires_at_most_diploma(it["snippet"])
-            out.append(f"- {it['title']}\n  {it['url']}\n  dall'elenco: "
-                       f"{'diploma -> ' + reason if ok else 'titolo non indicato'}")
-        out.append(f"\nLINK /concorsi/ SCARTATI ({len(rejected)}):")
-        out += [f"- {t} -> {u}" for t, u in rejected[:60]]
+        recs, rep = inpa.fetch_open(max_pages=3)
+        out.append(f"Corpo richiesta accettato: {rep['payload']}")
+        out.append(f"Bandi aperti totali (API): {rep['api_total']} · letti ora: {len(recs)}")
+        out += [f"Errore: {e}" for e in rep["errors"]]
+        if recs:
+            out.append(f"\nCampi del primo bando: {sorted(recs[0].keys())}")
+            out.append("Primo bando (JSON, troncato):")
+            out.append(json.dumps(recs[0], ensure_ascii=False, indent=1)[:3000])
+            mil = []
+            for r in recs:
+                n = inpa.normalise(r)
+                if inpa.in_area(n):
+                    n["class"], n["reason"] = inpa.classify(n)
+                    mil.append(n)
+            out.append(f"\nDI CUI A MILANO in queste pagine: {len(mil)}")
+            for n in mil:
+                out.append(f"- [{n['class']}] {n['title']} · {n['ente']}\n  {n['url']}\n"
+                           f"  motivo: {n['reason']}")
     except Exception as e:  # noqa: BLE001
         out.append(f"ERRORE: {e}")
     return Response("\n".join(out), mimetype="text/plain; charset=utf-8")

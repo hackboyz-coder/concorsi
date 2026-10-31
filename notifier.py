@@ -62,12 +62,13 @@ def bandi_alert(items, source_url):
              "<p>Nuovi bandi a Milano che richiedono <b>al massimo il diploma</b>:</p>",
              "<ul style='padding-left:18px'>"]
     for it in items:
-        dl = f" · scadenza <b>{escape(it['deadline'])}</b>" if it.get("deadline") else ""
+        dl = f" · scadenza <b>{escape(str(it['deadline']))}</b>" if it.get("deadline") else ""
+        ente = f"<br>{escape(it['ente'])}" if it.get("ente") else ""
         parts.append(
             f"<li style='margin-bottom:14px'><a href='{escape(it['url'])}'>"
-            f"<b>{escape(it['title'])}</b></a>{dl}<br>"
+            f"<b>{escape(it['title'])}</b></a>{ente}{dl}<br>"
             f"<span style='color:#666;font-size:13px'>{escape(it.get('reason') or '')}</span></li>")
     parts.append("</ul><p style='color:#777;font-size:13px;margin-top:20px'>Concorsi Watch · "
-                 f"<a href='{escape(source_url)}'>concorsipubblici.com</a> · "
+                 f"<a href='{escape(source_url)}'>inPA</a> · "
                  "verifica sempre i requisiti nel bando ufficiale.</p></div>")
     send_email(subject, "".join(parts))

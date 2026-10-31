@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block body %}
-<p class="sub"><a href="{{ source }}" target="_blank" rel="noopener">concorsipubblici.com · Milano</a>
+<p class="sub"><a href="https://www.inpa.gov.it/bandi-e-avvisi/" target="_blank" rel="noopener">inPA · bandi con sede a Milano</a>
   · controllo ogni {{ interval }} · avvisi a {{ alert_email or "—" }}</p>
 
 {% if not email_ok %}
@@ -10,35 +10,35 @@
 
 <div class="card">
   <div class="row" style="justify-content:space-between;margin-bottom:8px">
-    <b>{{ 'Tutti i bandi' if show_all else 'Bandi per diplomati' }} ({{ items|length }})</b>
+    <b>{{ views[view] }} ({{ items|length }})</b>
     <span class="row">
       <button type="button" id="mailbtn">Email di prova</button>
       <form method="post" action="/scan"><button class="primary" {{ 'disabled' if scanning }}>{{ 'Controllo in corso…' if scanning else 'Controlla ora' }}</button></form>
     </span>
   </div>
-  <p class="note" style="margin-top:0">{{ n_match }} su {{ total }} bandi attivi richiedono al massimo il diploma.
-    Se il filtro sbaglia, usa il pulsante a destra per correggerlo.</p>
+  <p class="note" style="margin-top:0">{{ total }} bandi aperti a Milano: {{ counts.si }} per diplomati,
+    {{ counts.forse }} da verificare (l'annuncio non dice il titolo di studio), {{ counts.no }} per laureati.
+    {% if view == 'forse' %}Apri il bando e usa i pulsanti per classificarlo.{% endif %}</p>
   <table>
     {% for b in items %}
-    <tr class="{{ 'hit' if b.ok and show_all }}">
+    <tr>
       <td>
         <a href="{{ b.url }}" target="_blank" rel="noopener"><b>{{ b.title }}</b></a>
         <div class="note">
-          {% if b.deadline %}Scadenza {{ b.deadline }} · {% endif %}visto {{ b.first_seen|when }}
-          {% if b.notified_at and b.ok %} · segnalato via email{% endif %}
-          {% if not b.detail_ok %} · scheda non ancora letta{% endif %}
+          {% if b.ente %}{{ b.ente }} · {% endif %}{% if b.posts %}{{ b.posts }} posti · {% endif %}
+          {% if b.deadline %}scadenza {{ b.deadline }} · {% endif %}visto {{ b.first_seen|when }}
+          {% if b.notified_at and b.k == 'si' and not b.override %} · segnalato via email{% endif %}
         </div>
-        {% if b.reason %}<div class="note" style="font-style:italic">“{{ b.reason }}”</div>{% endif %}
+        {% if b.reason %}<div class="note" style="font-style:italic">{{ b.reason }}</div>{% endif %}
       </td>
       <td style="white-space:nowrap;text-align:right">
-        <span class="tag {{ '' if b.ok else 'no' }}">{{ 'diploma' if b.ok else 'altro' }}{{ ' ✎' if b.override is not none }}</span>
-        <form method="post" action="/bandi/{{ b.id }}/toggle" style="display:inline">
-          <button style="padding:4px 8px;font-size:12px" title="Correggi la classificazione">{{ 'Non è per me' if b.ok else 'È per diplomati' }}</button>
-        </form>
+        <span class="tag {{ '' if b.k == 'si' else 'no' }}">{{ {'si':'diploma','no':'laurea','forse':'?'}[b.k] }}{{ ' ✎' if b.override }}</span>
+        {% if b.k != 'si' %}<form method="post" action="/bandi/{{ b.id }}/set/si" style="display:inline"><button style="padding:4px 8px;font-size:12px">Per diplomati</button></form>{% endif %}
+        {% if b.k != 'no' %}<form method="post" action="/bandi/{{ b.id }}/set/no" style="display:inline"><button style="padding:4px 8px;font-size:12px">Non per me</button></form>{% endif %}
       </td>
     </tr>
     {% else %}
-    <tr><td class="note">{{ 'Nessun bando letto finora.' if total == 0 else 'Nessun bando per diplomati al momento.' }}</td></tr>
+    <tr><td class="note">{{ 'Nessun bando letto finora.' if total == 0 else 'Nessun bando in questa vista.' }}</td></tr>
     {% endfor %}
   </table>
 </div>
@@ -47,18 +47,17 @@
   <b>Ultimo controllo</b>
   {% if scan %}
   <p class="note" style="margin:6px 0">
-    {{ scan.at|when }} · {{ scan.total }} bandi nell'elenco ({{ scan.pages or 0 }} pagine)
-    {% if scan.analysed %} · {{ scan.analysed }} schede nuove lette{% endif %}
-    {% if scan.seconds is defined %} · {{ scan.seconds }} s{% endif %}
+    {{ scan.at|when }} · {{ scan.open_total or 0 }} bandi aperti in Italia letti ({{ scan.pages or 0 }} pagine),
+    {{ scan.total }} a Milano{% if scan.seconds is defined %} · {{ scan.seconds }} s{% endif %}
     {% if scan.emailed %} · {{ scan.emailed }} segnalati via email{% endif %}
   </p>
   {% if scan.fatal %}<p class="err">{{ scan.fatal }}</p>{% endif %}
-  {% if scan.total == 0 and not scan.fatal %}<p class="err">Nessun bando letto: apri <a href="/diagnostica">Diagnostica</a> per capire cosa vede l'app.</p>{% endif %}
+  {% if not scan.open_total and not scan.fatal %}<p class="err">Nessun bando ricevuto da inPA: apri <a href="/diagnostica">Diagnostica</a> e mandami cosa vedi.</p>{% endif %}
   {% for e in scan.errors %}<div class="err">{{ e }}</div>{% endfor %}
   {% else %}<p class="note">Primo controllo in corso o non ancora eseguito.</p>{% endif %}
-  <p class="note">L'email parte solo per i bandi nuovi che richiedono al massimo il diploma di scuola superiore
-    (licenza media, scuola dell'obbligo, qualifica o maturità). Ogni bando viene segnalato una volta.
-    Il filtro legge il testo della scheda: verifica sempre i requisiti nel bando ufficiale.</p>
+  <p class="note">L'email parte per i bandi nuovi che richiedono al massimo il diploma di scuola superiore
+    (licenza media, scuola dell'obbligo, qualifica o maturità, oppure profili come istruttore, operatore, agente di polizia locale){{ ', e per quelli da verificare' if notify_unsure }}.
+    Ogni bando viene segnalato una volta. Verifica sempre i requisiti nel bando ufficiale.</p>
 </div>
 
 <script>

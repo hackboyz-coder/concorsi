@@ -1,17 +1,21 @@
 # Concorsi Milano · per diplomati
 
-Web app (stessa struttura di Price Watch) che una volta al giorno legge
-https://www.concorsipubblici.com/concorsi/regione/loc/milano, apre ogni bando nuovo e
-invia un'email a `ALERT_EMAIL` quando il bando richiede **al massimo il diploma di
-scuola secondaria superiore**: licenza media, scuola dell'obbligo, qualifica
-professionale o diploma di maturità. I bandi che chiedono la laurea vengono ignorati.
+Web app (stessa struttura di Price Watch) che una volta al giorno legge i bandi aperti
+da **inPA** (portale ufficiale del reclutamento, https://www.inpa.gov.it), tiene quelli
+con sede a Milano o in provincia e invia un'email a `ALERT_EMAIL` quando il bando
+richiede **al massimo il diploma di scuola secondaria superiore**: licenza media, scuola
+dell'obbligo, qualifica professionale o maturità, oppure profili che per contratto
+richiedono il diploma (istruttore, operatore, agente di polizia locale, assistente
+amministrativo...). I bandi per laureati vengono ignorati.
+
+I bandi il cui annuncio non indica il titolo di studio finiscono in **Da verificare**
+(nessuna email, a meno di `NOTIFY_UNSURE=1`).
 
 - Ogni bando viene segnalato una volta sola. Al primo controllo arriva un'unica email
   con tutti i bandi per diplomati già aperti; poi solo i nuovi.
-- La pagina **Per diplomati** mostra i bandi trovati con la frase del bando che ha fatto
-  scattare il filtro; **Tutti i bandi** mostra anche gli altri. Se il filtro sbaglia, il
-  pulsante accanto a ogni bando lo corregge.
-- **Diagnostica** mostra cosa legge l'app dalla pagina del sito (utile se il sito cambia).
+- Ogni bando mostra il motivo della classificazione; se il filtro sbaglia, i pulsanti
+  accanto al bando lo correggono.
+- **Diagnostica** mostra cosa risponde l'API di inPA (utile se l'API cambia).
 
 ## Deploy su Render
 
@@ -35,9 +39,10 @@ Costo: piano Starter (7 $/mese) + disco da 1 GB (~0,25 $/mese).
 | `RESEND_API_KEY` | chiave Resend (consigliato) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` | alternativa SMTP |
 | `APP_PASSWORD` | protegge la web app |
-| `LIST_URL` | pagina da monitorare (default: concorsi di Milano) |
 | `CHECK_INTERVAL_MINUTES` | frequenza dei controlli (default 1440 = 24 ore) |
-| `MAX_LIST_PAGES`, `MAX_DETAIL_PAGES` | limiti di pagine lette per controllo |
+| `PLACE_WORDS`, `PROVINCE_CODES` | zona (default `milano` e `MI`, separati da virgola) |
+| `NOTIFY_UNSURE` | `1` = manda email anche per i bandi da verificare |
+| `INPA_API_URL`, `INPA_MAX_PAGES` | endpoint e pagine massime dell'API inPA |
 | `DATA_DIR` / `DATABASE_URL` | SQLite su disco oppure Postgres |
 | `CRON_TOKEN` | per avviare un controllo da fuori: `/cron?token=...` |
 
